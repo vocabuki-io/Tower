@@ -9,30 +9,42 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Mochiy+Pop+One&display=swap">
 <style>
 :root{
-  --bg1:#3a1261; --bg2:#1e1a4f; --glowA:#ff4fa3; --glowB:#33d6e6;
-  --title:#ffffff; --text:#1d1238;
+  /* dreamcore 原色パレット（中間色なし・ベタ塗り） */
+  --c1:#ff00d4; --c2:#00ffe1; --c3:#ffe600; --c4:#7b00ff; --c5:#00ff5a;
+  --ink:#12002b; --title:#ffffff; --text:#1d1238;
 }
 *{box-sizing:border-box;margin:0}
 html,body{height:100%;overflow:hidden}
 body{
   font-family:"Mochiy Pop One","Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;
-  background:
-    radial-gradient(circle at 15% 8%,var(--glowA) 0%,transparent 45%),
-    radial-gradient(circle at 90% 92%,var(--glowB) 0%,transparent 45%),
-    linear-gradient(160deg,var(--bg1),var(--bg2));
+  /* 全部ハードストップ＝アンチエイリアスなしのガビガビ。GPU任せの静止画なので処理は増えない */
+  background-color:var(--c1);
+  background-image:
+    /* 走査線 */
+    repeating-linear-gradient(0deg,rgba(0,0,0,.22) 0 2px,rgba(0,0,0,0) 2px 5px),
+    /* 市松 */
+    repeating-conic-gradient(rgba(255,255,255,.12) 0 25%,rgba(0,0,0,.10) 0 50%),
+    /* 左上から放射するギザギザ */
+    repeating-conic-gradient(from 0deg at 18% 10%,var(--c3) 0 4deg,rgba(0,0,0,0) 4deg 8deg),
+    /* 右下の同心円バンド */
+    repeating-radial-gradient(circle at 85% 90%,var(--c2) 0 22px,rgba(0,0,0,0) 22px 44px),
+    /* 原色4分割のベタ地 */
+    linear-gradient(160deg,var(--c1) 0 28%,var(--c4) 28% 52%,var(--c5) 52% 74%,var(--c3) 74% 100%);
+  background-size:auto,72px 72px,auto,auto,auto;
   color:var(--title);
   -webkit-tap-highlight-color:transparent;
 }
 #confetti{position:fixed;inset:0;z-index:0;pointer-events:none}
 #title{position:absolute;left:0;right:0;text-align:center;z-index:1;white-space:nowrap;
-  color:var(--title);text-shadow:0 .06em 0 var(--glowA),0 0 .4em rgba(255,79,163,.6)}
+  color:var(--title);-webkit-text-stroke:.035em var(--ink);
+  text-shadow:.035em .035em 0 var(--c2),-.035em -.035em 0 var(--c1),0 .08em 0 var(--ink)}
 #map{position:absolute;inset:0;z-index:1}
 .cell{position:absolute;display:flex;align-items:center;justify-content:center;
   color:var(--text);text-decoration:none;white-space:nowrap;overflow:hidden;
-  border-radius:10px;box-shadow:0 3px 0 rgba(0,0,0,.25);transition:transform .12s}
+  border-radius:10px;box-shadow:4px 4px 0 var(--ink);transition:transform .12s}
 a.cell:active{transform:scale(.96)}
 a.cell:focus-visible{outline:3px solid #fff;outline-offset:2px}
-.cell.official{background:#fff;border:3px dashed var(--glowA)}
+.cell.official{background:#fff;border:3px dashed var(--c1)}
 @media (prefers-reduced-motion:reduce){.cell{transition:none}}
 </style>
 </head>
@@ -144,7 +156,7 @@ document.fonts&&document.fonts.load(`400 40px "Mochiy Pop One"`,D.title+D.people
 
 // ---- 紙吹雪（軽め） ----
 const cv=document.getElementById('confetti'),g=cv.getContext('2d');
-const COLORS=['#ff4fa3','#33d6e6','#ffd84a','#ffffff','#a77bff','#ff9bd2'];
+const COLORS=['#ff00d4','#00ffe1','#ffe600','#ffffff','#7b00ff','#00ff5a'];
 let parts=[],dpr=1,running=true;
 function sizeCanvas(){
   dpr=Math.min(devicePixelRatio||1,2);
