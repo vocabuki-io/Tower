@@ -142,7 +142,7 @@ function render(){
     const el=document.createElement(id?'a':'div');
     el.className='cell'+(c.official?' official':'');
     el.textContent=c.name;
-    if(id){el.href='https://x.com/'+id.replace(/^@/,'');el.target='_blank';el.rel='noopener'}
+    if(id){el.href=/^https?:\/\//.test(id)?id:'https://x.com/'+id.replace(/^@/,'');el.target='_blank';el.rel='noopener'}
     Object.assign(el.style,{left:(c.x0+gap/2)+'px',top:(c.y0+gap/2)+'px',width:c.cw+'px',height:c.ch+'px',
       fontSize:gfs[c.official?'o':c.value]+'px'});
     if(!c.official)el.style.background=FILLS[ci++%FILLS.length];
