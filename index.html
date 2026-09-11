@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>サーバーありがとう</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Mochiy+Pop+One&display=swap">
+<style>
+:root{
+  --bg1:#3a1261; --bg2:#1e1a4f; --glowA:#ff4fa3; --glowB:#33d6e6;
+  --title:#ffffff; --text:#1d1238;
+}
+*{box-sizing:border-box;margin:0}
+html,body{height:100%;overflow:hidden}
+body{
+  font-family:"Mochiy Pop One","Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;
+  background:
+    radial-gradient(circle at 15% 8%,var(--glowA) 0%,transparent 45%),
+    radial-gradient(circle at 90% 92%,var(--glowB) 0%,transparent 45%),
+    linear-gradient(160deg,var(--bg1),var(--bg2));
+  color:var(--title);
+  -webkit-tap-highlight-color:transparent;
+}
+#confetti{position:fixed;inset:0;z-index:0;pointer-events:none}
+#title{position:absolute;left:0;right:0;text-align:center;z-index:1;white-space:nowrap;
+  color:var(--title);text-shadow:0 .06em 0 var(--glowA),0 0 .4em rgba(255,79,163,.6)}
+#map{position:absolute;inset:0;z-index:1}
+.cell{position:absolute;display:flex;align-items:center;justify-content:center;
+  color:var(--text);text-decoration:none;white-space:nowrap;overflow:hidden;
+  border-radius:10px;box-shadow:0 3px 0 rgba(0,0,0,.25);transition:transform .12s}
+a.cell:active{transform:scale(.96)}
+a.cell:focus-visible{outline:3px solid #fff;outline-offset:2px}
+.cell.official{background:#fff;border:3px dashed var(--glowA)}
+@media (prefers-reduced-motion:reduce){.cell{transition:none}}
+</style>
+</head>
+<body>
+<canvas id="confetti" aria-hidden="true"></canvas>
+<h1 id="title"></h1>
+<nav id="map" aria-label="参加者一覧"></nav>
+
+<script src="data.js"></script>
+<script>
+const D=window.TOWER;
+const FILLS=['#ff5fae','#3fd8e6','#ffd84a','#a77bff','#ff9bd2','#7ff0f7','#ffe98a','#c9a8ff'];
+const FONT='"Mochiy Pop One","Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif';
+document.title=D.title;
+
+const mctx=document.createElement('canvas').getContext('2d');
+const emW=t=>{mctx.font=`400 100px ${FONT}`;return mctx.measureText(t).width/100};
+
+// ---- 並べ方（1口以外はツリーマップ、1口は正方形） ----
+function worst(row,side){let s=0,mx=-1/0,mn=1/0;row.forEach(r=>{s+=r.area;mx=Math.max(mx,r.area);mn=Math.min(mn,r.area)});return Math.max(side*side*mx/(s*s),s*s/(side*side*mn))}
+function squarify(items,rect){
+  const out=[];let rest=items.slice(),r={...rect};
+  while(rest.length){
+    const side=Math.min(r.w,r.h);let row=[rest[0]],i=1;
+    while(i<rest.length){const nr=row.concat(rest[i]);if(worst(nr,side)<=worst(row,side)){row=nr;i++}else break}
+    rest=rest.slice(i);const s=row.reduce((a,b)=>a+b.area,0);
+    if(r.w>=r.h){const cw=s/r.h;let y=r.y;row.forEach(it=>{const h=it.area/cw;out.push({...it,x:r.x,y,w:cw,h});y+=h});r={x:r.x+cw,y:r.y,w:r.w-cw,h:r.h}}
+    else{const rh=s/r.w;let x=r.x;row.forEach(it=>{const w=it.area/rh;out.push({...it,x,y:r.y,w,h:rh});x+=w});r={x:r.x,y:r.y+rh,w:r.w,h:r.h-rh}}
+  }
+  return out;
+}
+
+function layout(){
+  const W=innerWidth,H=innerHeight,pad=Math.max(8,W*0.025),gap=Math.max(4,W*0.012);
+  const TH=Math.min(H*0.11,W*0.16);
+  const title=document.getElementById('title');
+  title.textContent=D.title;
+  const tfs=Math.min(TH*0.6,(W-pad*2)/emW(D.title));
+  title.style.fontSize=tfs+'px';title.style.top=(pad+TH/2-tfs*0.62)+'px';
+
+  const area={x:pad,y:pad+TH,w:W-pad*2,h:H-pad*2-TH};
+  const people=D.people.map((p,i)=>({name:p[0],value:+p[1],xid:p[2]||'',order:i}))
+    .filter(p=>p.value>0).sort((a,b)=>b.value-a.value||a.order-b.order);
+  const big=people.filter(p=>p.value>1),ones=people.filter(p=>p.value===1);
+  const bigTotal=big.reduce((a,b)=>a+b.value,0);
+  let cells=[];
+
+  if(ones.length){
+    // 正方形の列数：大きい側との比率が一番正確になるものを選ぶ
+    let best=null;
+    for(let c=1;c<=ones.length;c++){
+      const s=area.w/c,rows=Math.ceil(ones.length/c),bandH=rows*s;
+      if(bandH>area.h*0.85)continue;
+      const restUnit=bigTotal?(area.w*(area.h-bandH))/bigTotal:s*s;
+      const score=Math.abs(Math.log(restUnit/(s*s)));
+      if(!best||score<best.score)best={c,s,rows,bandH,score};
+    }
+    const {c,s,rows,bandH}=best;
+    const y0=area.y+area.h-bandH;
+    ones.forEach((p,i)=>cells.push({...p,x0:area.x+(i%c)*s,y0:y0+Math.floor(i/c)*s,w:s,h:s}));
+    const empty=rows*c-ones.length;
+    if(empty>0){
+      const i=ones.length;
+      cells.push({name:D.official.name,value:0,xid:D.official.x||'',official:true,
+        x0:area.x+(i%c)*s,y0:y0+(rows-1)*s,w:s*empty,h:s});
+    }
+    if(big.length){
+      const rect={x:area.x,y:area.y,w:area.w,h:area.h-bandH};
+      const sc=big.map(p=>({...p,area:p.value/bigTotal*rect.w*rect.h}));
+      squarify(sc,rect).forEach(r=>cells.push({...r,x0:r.x,y0:r.y}));
+    }
+  }else{
+    const sc=big.map(p=>({...p,area:p.value/bigTotal*area.w*area.h}));
+    squarify(sc,area).forEach(r=>cells.push({...r,x0:r.x,y0:r.y}));
+  }
+  return {cells,gap};
+}
+
+function render(){
+  const {cells,gap}=layout();
+  // 同じ口数は同じ文字サイズ
+  const gfs={};
+  cells.forEach(c=>{
+    c.cw=Math.max(0,c.w-gap);c.ch=Math.max(0,c.h-gap);
+    const p=Math.min(c.cw,c.ch)*0.1+4;
+    const wf=(c.cw-p*2)/emW(c.name);
+    c.fs=Math.max(8,Math.min(wf,c.ch*0.42));
+    const key=c.official?'o':c.value;
+    gfs[key]=Math.min(gfs[key]??1/0,c.fs);
+  });
+  const map=document.getElementById('map');map.innerHTML='';
+  let ci=0;
+  cells.forEach(c=>{
+    const id=c.xid;
+    const el=document.createElement(id?'a':'div');
+    el.className='cell'+(c.official?' official':'');
+    el.textContent=c.name;
+    if(id){el.href='https://x.com/'+id.replace(/^@/,'');el.target='_blank';el.rel='noopener'}
+    Object.assign(el.style,{left:(c.x0+gap/2)+'px',top:(c.y0+gap/2)+'px',width:c.cw+'px',height:c.ch+'px',
+      fontSize:gfs[c.official?'o':c.value]+'px'});
+    if(!c.official)el.style.background=FILLS[ci++%FILLS.length];
+    map.appendChild(el);
+  });
+}
+
+let t;addEventListener('resize',()=>{clearTimeout(t);t=setTimeout(()=>{render();sizeCanvas()},120)});
+render();
+document.fonts&&document.fonts.load(`400 40px "Mochiy Pop One"`,D.title+D.people.map(p=>p[0]).join('')+D.official.name).then(render);
+
+// ---- 紙吹雪（軽め） ----
+const cv=document.getElementById('confetti'),g=cv.getContext('2d');
+const COLORS=['#ff4fa3','#33d6e6','#ffd84a','#ffffff','#a77bff','#ff9bd2'];
+let parts=[],dpr=1,running=true;
+function sizeCanvas(){
+  dpr=Math.min(devicePixelRatio||1,2);
+  cv.width=innerWidth*dpr;cv.height=innerHeight*dpr;
+  g.setTransform(dpr,0,0,dpr,0,0);
+  const n=Math.round(Math.min(70,innerWidth*innerHeight/9000));
+  while(parts.length<n)parts.push(newPart(true));parts.length=n;
+}
+function newPart(anywhere){
+  return {x:Math.random()*innerWidth,y:anywhere?Math.random()*innerHeight:-10,
+    w:5+Math.random()*6,h:3+Math.random()*4,vy:0.4+Math.random()*0.9,
+    sway:Math.random()*Math.PI*2,sw:0.01+Math.random()*0.02,rot:Math.random()*6.28,vr:(Math.random()-.5)*0.08,
+    c:COLORS[Math.random()*COLORS.length|0]};
+}
+function draw(){
+  g.clearRect(0,0,innerWidth,innerHeight);
+  parts.forEach(p=>{
+    g.save();g.translate(p.x,p.y);g.rotate(p.rot);g.scale(1,Math.cos(p.rot*1.5));
+    g.fillStyle=p.c;g.fillRect(-p.w/2,-p.h/2,p.w,p.h);g.restore();
+  });
+}
+function tick(){
+  if(!running)return;
+  parts.forEach((p,i)=>{
+    p.sway+=p.sw;p.x+=Math.sin(p.sway)*0.6;p.y+=p.vy;p.rot+=p.vr;
+    if(p.y>innerHeight+10)parts[i]=newPart(false);
+  });
+  draw();requestAnimationFrame(tick);
+}
+sizeCanvas();
+const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+if(reduce)draw();else requestAnimationFrame(tick);
+document.addEventListener('visibilitychange',()=>{
+  if(reduce)return;running=!document.hidden;if(running)requestAnimationFrame(tick);
+});
+</script>
+</body>
+</html>
