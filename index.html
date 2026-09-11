@@ -92,24 +92,29 @@ function layout(){
   const bigTotal=big.reduce((a,b)=>a+b.value,0);
   let cells=[];
 
-  if(ones.length){
+  // きっかけ枠は常に1マス確保する（余りが出ればその分だけ横に伸ばす）
+  const hasOff=!!(D.official&&D.official.name);
+  const slots=ones.length+(hasOff?1:0);
+
+  if(slots){
     // 正方形の列数：大きい側との比率が一番正確になるものを選ぶ
     let best=null;
-    for(let c=1;c<=ones.length;c++){
-      const s=area.w/c,rows=Math.ceil(ones.length/c),bandH=rows*s;
+    for(let c=1;c<=slots;c++){
+      const s=area.w/c,rows=Math.ceil(slots/c),bandH=rows*s;
       if(bandH>area.h*0.85)continue;
       const restUnit=bigTotal?(area.w*(area.h-bandH))/bigTotal:s*s;
       const score=Math.abs(Math.log(restUnit/(s*s)));
       if(!best||score<best.score)best={c,s,rows,bandH,score};
     }
+    // 極端に細長い画面だと候補が全滅するので、1行に詰める形で必ず確保する
+    if(!best){const s=area.w/slots;best={c:slots,s,rows:1,bandH:s}}
     const {c,s,rows,bandH}=best;
     const y0=area.y+area.h-bandH;
     ones.forEach((p,i)=>cells.push({...p,x0:area.x+(i%c)*s,y0:y0+Math.floor(i/c)*s,w:s,h:s}));
-    const empty=rows*c-ones.length;
-    if(empty>0){
+    if(hasOff){
       const i=ones.length;
       cells.push({name:D.official.name,value:0,xid:D.official.x||'',official:true,
-        x0:area.x+(i%c)*s,y0:y0+(rows-1)*s,w:s*empty,h:s});
+        x0:area.x+(i%c)*s,y0:y0+Math.floor(i/c)*s,w:s*(rows*c-i),h:s});
     }
     if(big.length){
       const rect={x:area.x,y:area.y,w:area.w,h:area.h-bandH};
